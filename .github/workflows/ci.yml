@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  sozlesme:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Sözleşme uyum denetimi (vendored sshpocket doğrulayıcısı; uyarılar hata sayılmaz)
+        run: python3 -I tools/validate/component_validate.py .
+      - name: Vendored doğrulayıcı özetleri VENDORED.md ile aynı mı (sessiz sapma yok)
+        run: |
+          set -eu
+          for f in component_validate.py component_manifest.py; do
+            want=$(grep -F "\`$f\`" tools/validate/VENDORED.md | grep -o '[0-9a-f]\{64\}')
+            have=$(sha256sum "tools/validate/$f" | cut -d' ' -f1)
+            [ "$want" = "$have" ] || { echo "SAPMA: $f (VENDORED.md'deki özet ile eşleşmiyor)"; exit 1; }
+          done
+      - name: Playbook sözdizimi (ansible-core, hash'li kurulum)
+        run: |
+          set -eu
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet --require-hashes --only-binary :all: -r requirements.txt
+          .venv/bin/ansible-playbook --syntax-check -i 'localhost,' playbooks/bilgi.yml

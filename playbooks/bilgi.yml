@@ -1,0 +1,17 @@
+# Örnek SALT OKUNUR eylem: sunucu bilgisini okur ve sshpocket'in okuyabileceği TEK SATIRLIK sonuç yazar.
+# Sözleşme: "SSHPOCKET_RESULT <paket-id>.<eylem> anahtar=değer ..." (anahtarlar component.json outputs.keys ile aynı;
+# değerler yalnızca [A-Za-z0-9_.:+-], en çok 64 karakter olabilir → regex_replace ile temizlenir).
+# Not: ansible_facts[...] kullanın (ansible_distribution gibi üst düzey değişkenler ansible-core 2.24'te kalkıyor).
+- name: Sunucu bilgisi (salt okunur)
+  hosts: ornek
+  gather_facts: true
+  become: false
+  tasks:
+    - name: Sonuç satırı
+      ansible.builtin.debug:
+        msg: >-
+          SSHPOCKET_RESULT ornek-bilgi.bilgi
+          kernel={{ ansible_facts['kernel'] | regex_replace('[^A-Za-z0-9_.:+-]', '_') | truncate(60, True, '') }}
+          os={{ (ansible_facts['distribution'] ~ '-' ~ ansible_facts['distribution_version']) | lower | regex_replace('[^a-z0-9_.:+-]', '_') | truncate(60, True, '') }}
+          uptime_s={{ ansible_facts['uptime_seconds'] | int }}
+          etiket={{ (ornek_etiket | default('merhaba')) | regex_replace('[^A-Za-z0-9_.:+-]', '_') | truncate(60, True, '') }}
