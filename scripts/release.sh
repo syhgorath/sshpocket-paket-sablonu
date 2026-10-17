@@ -46,7 +46,7 @@ if tar -tzf "$ARCHIVE" | grep -qE "^$ID-$VERSION/(\.github/|tools/|scripts/|dist
 fi
 
 # Sözleşme uyum denetimi (arşiv üzerinde; ❌ varsa imzalanmaz)
-python3 -I tools/validate/component_validate.py "$ARCHIVE" || die "sözleşme uyum denetimi başarısız (yukarıdaki ❌ satırlarına bakın)"
+python3 -I tools/validate/component_validate.py "$ARCHIVE" --unsigned || die "sözleşme uyum denetimi başarısız (yukarıdaki ❌ satırlarına bakın)"
 
 ssh-keygen -Y sign -f "$KEY" -n "$NS" "$ARCHIVE"
 
