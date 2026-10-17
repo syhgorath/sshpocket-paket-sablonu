@@ -2,7 +2,7 @@
 
 Bu klasördeki dosyalar sshpocket'ten KOPYALANMIŞTIR; elle düzenlemeyin. Güncellemek için: `tools/sync-validator.sh <sshpocket-dizini>`.
 
-- kaynak: https://github.com/syhgorath/sshpocket (commit `a8d09ef`, sürüm `3.6.0`)
+- kaynak: https://github.com/syhgorath/sshpocket (commit `1ebfa71`, sürüm `3.6.0`)
 - tarih: 2026-10-17
 
 | dosya | sha256 |
