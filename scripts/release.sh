@@ -41,7 +41,7 @@ roots=$(tar -tzf "$ARCHIVE" | cut -d/ -f1 | sort -u)
 [ "$roots" = "$ID-$VERSION" ] || die "pakette beklenmeyen kök dizin(ler): $roots"
 inner=$(tar -xzOf "$ARCHIVE" "$ID-$VERSION/VERSION" | tr -d '[:space:]')
 [ "$inner" = "$VERSION" ] || die "paket içindeki VERSION ($inner) etiketle ($VERSION) aynı değil"
-if tar -tzf "$ARCHIVE" | grep -qE "^$ID-$VERSION/(\.github/|tools/|scripts/|dist/|\.gitattributes)"; then
+if tar -tzf "$ARCHIVE" | grep -qE "^$ID-$VERSION/(\.github/|tools/|scripts/|ornekler/|dist/|\.gitattributes)"; then
     die "pakette geliştirme dosyaları var (.gitattributes export-ignore kontrol edin)"
 fi
 

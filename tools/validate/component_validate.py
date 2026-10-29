@@ -27,6 +27,8 @@ SECRET_NAME = re.compile(r"(pass(word|wd)?|secret|token|credential|private_?key|
 SECRET_FILE = re.compile(r"(^|/)(\.env|id_(ed25519|rsa|ecdsa|dsa)[^/]*|[^/]*\.pem|[^/]*\.secrets)$")
 PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
 ROLLBACK_WORDS = re.compile(r"(geri al|rollback|restore|kurtar|recovery|undo)", re.I)
+# kurtarma eylemleri kontrol kaybından sonra da çalışmalı: ön koşul (preview) beklenmez
+RECOVERY_NAME = re.compile(r"^(rollback|recover|restore|undo)", re.I)
 
 
 def ok(sec, msg):
@@ -101,9 +103,14 @@ def read_text(path):
         return ""
 
 
+# DİZİN modunda (yazarın çalışma klasörü) gitignore'lu geliştirme klasörleri atlanır; ARŞİV modunda ATLANMAZ (yayın arşivinde bunlar olmamalı).
+DEV_DIRS = (".venv", "venv", ".tox", ".pytest_cache", ".mypy_cache", ".ruff_cache")
+skip_dev = []
+
+
 def walk_files(root):
     for d, dirs, files in os.walk(root):
-        dirs[:] = [x for x in dirs if x not in (".git", "node_modules", "__pycache__")]
+        dirs[:] = [x for x in dirs if x not in (".git", "node_modules", "__pycache__") and x not in skip_dev]
         for fn in files:
             yield os.path.join(d, fn)
 
@@ -226,7 +233,7 @@ def check_actions(root, info):
     pid = first(info, "id")
     runner = first(info, "runner")
     names = info.get("action", [])
-    code = corpus(root, ["playbooks", "roles", "vars", "inventory", "templates", "files"])
+    code = corpus(root, ["playbooks", "roles", "vars", "inventory", "templates", "files", "scripts"])
     mutating_without_docs = False
     for a in names:
         cmd = first(info, "action.%s.cmd" % a)
@@ -255,6 +262,18 @@ def check_actions(root, info):
                     fail("Eylemler", "%s: playbook yok: %s" % (a, pb))
                 else:
                     pass
+        elif runner == "script":
+            # script: cmd 'scripts/<ad>.sh [argümanlar]' (biçimi manifest doğrulayıcısı denetler); betik pakette olmalı, düz dosya (sembolik bağ değil)
+            script = os.path.join(root, toks[0]) if toks else ""
+            if not toks or not os.path.isfile(script):
+                fail("Eylemler", "%s: betik yok: %s" % (a, toks[0] if toks else "(boş)"))
+                continue
+            if os.path.islink(script):
+                fail("Eylemler", "%s: betik sembolik bağ olamaz: %s" % (a, toks[0]))
+                continue
+            if os.path.getsize(script) > 262144:
+                fail("Eylemler", "%s: betik 256 KB'tan büyük: %s" % (a, toks[0]))
+                continue
         # değiştiren eylem kuralları (uyarı: kurtarma eylemleri ön koşulsuz olabilir)
         if mutating:
             if sudo != "yes":
@@ -262,13 +281,15 @@ def check_actions(root, info):
             if nwarn == 0:
                 issues.append("hiç warning yok (neyi değiştirdiğini/önizlemenin göstermediklerini yazın)")
             readonly = [r for r in requires if not first(info, "action.%s.effects" % r)]
-            if not readonly:
+            # yalnızca araç kuran eylem (örn. denetim tarayıcısı) yapılandırmayı değiştirmez; kurtarma eylemleri bilerek ön koşulsuzdur
+            config_changing = bool(set(effects.split(",")) - {"installs-package"})
+            if not readonly and config_changing and not RECOVERY_NAME.match(a):
                 issues.append("salt okunur bir 'preview' ön koşulu yok (geri alma/kurtarma eylemleri bilerek ön koşulsuz olabilir)")
             mutating_without_docs = True
         if first(info, "action.%s.outputs.format" % a):
             tag = "SSHPOCKET_RESULT %s.%s" % (pid, a)
             if tag not in code:
-                issues.append("outputs.format var ama playbook/rollerde '%s' çıktısı bulunamadı" % tag)
+                issues.append("outputs.format var ama playbook/rol/betiklerde '%s' çıktısı bulunamadı" % tag)
         if issues:
             for i in issues:
                 warn("Eylemler", "%s: %s" % (a, i))
@@ -282,7 +303,7 @@ def check_vars(root, info):
     if not vars_:
         ok("Değişkenler", "değişken tanımı yok")
         return
-    code = corpus(root, ["playbooks", "roles", "vars", "inventory", "templates", "files"])
+    code = corpus(root, ["playbooks", "roles", "vars", "inventory", "templates", "files", "scripts"])
     for name, vtype, req, typed in [(v + [""] * 4)[:4] for v in vars_]:
         notes = []
         if typed == "0":
@@ -290,8 +311,9 @@ def check_vars(root, info):
         # bool/int bir parola taşıyamaz (örn. password_inactive_days = gün sayısı): yalnızca metin alabilen türlerde uyar
         if SECRET_NAME.search(name) and vtype not in ("bool", "int"):
             notes.append("adı parola/anahtar/token izlenimi veriyor: gizli değer değişken OLAMAZ (standart §6)")
-        if name not in code:
-            notes.append("playbook/rol/vars içinde kullanılmıyor")
+        # script runner: değişken betikte SSHPOCKET_VAR_<AD> olarak okunur
+        if name not in code and ("SSHPOCKET_VAR_%s" % name.upper()) not in code:
+            notes.append("playbook/rol/vars/betik içinde kullanılmıyor")
         if notes:
             for n in notes:
                 warn("Değişkenler", "%s: %s" % (name, n))
@@ -314,6 +336,7 @@ def check_security(root):
             fail("Güvenlik", "özel anahtar bloğu bulundu: %s" % rel)
             bad = True
     for d, dirs, files in os.walk(root):
+        dirs[:] = [x for x in dirs if x not in skip_dev]
         for n in dirs:
             if os.path.islink(os.path.join(d, n)):
                 fail("Güvenlik", "sembolik bağ yasak: %s" % os.path.relpath(os.path.join(d, n), root))
@@ -372,6 +395,11 @@ def main(argv):
         print("kullanım: component_validate.py <paket-dizini | <id>-<sürüm>.tar.gz> [--strict] [--unsigned]", file=sys.stderr)
         return 2
     root, id_hint, ver_hint, tmp, archive = resolve_input(args[0])
+    if root is not None and archive is None:
+        skip_dev.extend(DEV_DIRS)
+        found = [x for x in DEV_DIRS if os.path.isdir(os.path.join(root, x))]
+        if found:
+            ok("Düzen", "geliştirme klasörleri atlandı (%s): dizin modu; yayın arşivinde bulunmamalı, arşiv modu atlamaz" % ", ".join(found))
     try:
         print("sshpocket --components validate %s\n" % args[0])
         if root is not None:

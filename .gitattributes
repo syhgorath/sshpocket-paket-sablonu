@@ -2,5 +2,6 @@
 .github/ export-ignore
 tools/ export-ignore
 scripts/ export-ignore
+ornekler/ export-ignore
 .gitattributes export-ignore
 .gitignore export-ignore
