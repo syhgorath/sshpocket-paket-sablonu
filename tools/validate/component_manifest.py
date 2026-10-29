@@ -20,11 +20,15 @@ VAR_SCALARS = ("string", "bool", "int", "path", "cidr", "enum")
 RE_ID = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 RE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 RE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+RE_PLATFORM = re.compile(r"^[a-z0-9][a-z0-9._-]{0,29}$")
 RE_PROFILE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 RE_GROUP = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 RE_CMD_BAD = re.compile(r"[;&|`$<>(){}\\\"'\n\r\t\x00]")
+VAR_DESC_MAX = 2000   # değişken açıklaması (arayüzde gösterilir); diğer metinler 500
 RE_TEXT_BAD = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 RE_PYRANGE = re.compile(r"^>=[0-9]+\.[0-9]+(,<[0-9]+\.[0-9]+)?$")
+RE_SCRIPT = re.compile(r"^scripts/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.sh$")
+RE_SCRIPT_ARG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._=:/+,-]{0,63}$|^--?[A-Za-z0-9][A-Za-z0-9._=:/+,-]{0,63}$")
 RE_OUTKEY = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 RE_VALUE = re.compile(r"^(<[a-z0-9_ -]{1,40}>|[A-Za-z0-9_./:@=,+-]{1,200})$")
 
@@ -160,6 +164,15 @@ def main():
         if not is_str(cmd) or not cmd.strip() or len(cmd) > 400 or RE_CMD_BAD.search(cmd):
             err("%s: cmd geçersiz (kabuk meta karakteri/satır sonu yok, boş olamaz)" % name)
             cmd = ""
+        if runner == "script" and cmd:
+            # script: ilk sözcük paket içindeki 'scripts/<ad>.sh' yolu (".." ve mutlak yol yok), kalanı düz argüman (sunucuda 'bash -s -- <argümanlar>')
+            sw = cmd.split()
+            if not RE_SCRIPT.match(sw[0]) or ".." in sw[0]:
+                err("%s: script runner için cmd 'scripts/<ad>.sh [argümanlar]' ile başlamalı" % name)
+                cmd = ""
+            elif any(not RE_SCRIPT_ARG.match(w) for w in sw[1:]) or len(sw) > 9:
+                err("%s: script argümanları düz sözcük olmalı (en çok 8; harf/rakam ve . _ = : / + , -)" % name)
+                cmd = ""
         effects = a.get("effects")
         if (not isinstance(effects, list) or any(e not in EFFECTS for e in effects)
                 or len(set(effects)) != len(effects)):
@@ -168,6 +181,10 @@ def main():
         for k in ("requires_sudo", "interactive"):
             if k in a and not isinstance(a[k], bool):
                 err("%s: %s bool olmalı" % (name, k))
+        if "platforms" in a:
+            pl = a["platforms"]
+            if not isinstance(pl, list) or not pl or len(pl) > 10 or any(not is_str(x) or not RE_PLATFORM.match(x) for x in pl) or len(set(pl)) != len(pl):
+                err("%s: platforms 1-10 benzersiz, küçük harfli kimlikten oluşan liste olmalı" % name)
         confirm = a.get("confirm", "none")
         if confirm not in CONFIRMS:
             err("%s: confirm geçersiz (%s)" % (name, "|".join(CONFIRMS)))
@@ -194,6 +211,8 @@ def main():
         act_lines.append("action.%s.confirm=%s" % (name, effective))
         act_lines.append("action.%s.confirm_raised=%s" % (name, "yes" if effective != confirm else "no"))
         act_lines.append("action.%s.warnings=%d" % (name, len(warns)))
+        if isinstance(a.get("platforms"), list) and a["platforms"] and all(is_str(x) for x in a["platforms"]):
+            act_lines.append("action.%s.platforms=%s" % (name, ",".join(a["platforms"])))
         for w in warns:
             if is_str(w):
                 act_lines.append("action.%s.warning=%s" % (name, w))
@@ -204,7 +223,9 @@ def main():
                 err("%s: outputs nesne olmalı" % name)
             else:
                 dv = outs.get("dir_var")
-                if dv is not None:
+                if dv is not None and runner == "script":
+                    err("%s: outputs.dir_var script runner'da desteklenmez (betik sunucuda çalışır; sonuç SSHPOCKET_RESULT satırıyla gelir)" % name)
+                elif dv is not None:
                     decl = {}
                     for vv in d.get("vars", []) if isinstance(d.get("vars", []), list) else []:
                         if isinstance(vv, dict) and is_str(vv.get("name")):
@@ -248,6 +269,12 @@ def main():
             if r == name:
                 err("%s: requires kendini gösteremez" % name)
         graph[name] = [r for r in req if r in actions]
+        # ön koşul eylem, bu eylemin göründüğü her platformda da görünmeli (aksi halde eylem hiç çalıştırılamaz)
+        mine = a.get("platforms")
+        for r in graph[name]:
+            theirs = actions[r].get("platforms") if isinstance(actions[r], dict) else None
+            if isinstance(theirs, list) and (not isinstance(mine, list) or any(x not in theirs for x in mine)):
+                err("%s: requires %s, ama %s bu eylemin platformlarının hepsinde yok" % (name, r, r))
         act_lines.append("action.%s.requires=%s" % (name, ",".join(graph[name])))
 
     def has_cycle():
@@ -267,6 +294,7 @@ def main():
     # --- değişkenler ---
     var_lines = []
     seen_vars = set()
+    var_specs = {}
     vars_ = d.get("vars", [])
     if not isinstance(vars_, list):
         err("vars liste olmalı")
@@ -289,8 +317,16 @@ def main():
             continue
         if "required" in v and not isinstance(v["required"], bool):
             err("%s: required bool olmalı" % n)
+        if "group" in v:
+            g = v["group"]
+            if not is_str(g) or not g.strip() or len(g) > 40 or RE_TEXT_BAD.search(g):
+                err("%s: group 1-40 karakterlik düz metin olmalı" % n)
+        if "platforms" in v:
+            pl = v["platforms"]
+            if not isinstance(pl, list) or not pl or len(pl) > 10 or any(not is_str(x) or not RE_PLATFORM.match(x) for x in pl):
+                err("%s: platforms 1-10 küçük harfli kimlikten oluşan liste olmalı" % n)
         if "description" in v:
-            text_ok(v["description"], "%s: description" % n)
+            text_ok(v["description"], "%s: description" % n, maxlen=VAR_DESC_MAX)
         if t == "enum":
             vals = v.get("values")
             if not isinstance(vals, list) or not vals or any(not is_str(x) or RE_TEXT_BAD.search(x) for x in vals):
@@ -310,11 +346,54 @@ def main():
                 err("%s: bool default geçersiz" % n)
             if "warn_if" in v and not isinstance(v["warn_if"], bool):
                 err("%s: warn_if bool olmalı" % n)
+        var_specs[n] = (t, v)
         var_lines.append("var=%s:%s:%s:%s" % (n, t, "yes" if v.get("required") is True else "no", typed))
+
+    # --- platform_var: değişkenleri platforma göre süzmek için platformu seçen değişkenin adı (isteğe bağlı) ---
+    if "platform_var" in d:
+        pv = d["platform_var"]
+        if not is_str(pv) or pv not in var_specs or var_specs[pv][0] not in ("string", "enum"):
+            err("platform_var tanımlı bir string/enum değişkenin adı olmalı")
+
+    # --- eylem düzeyi sabit değişkenler (action.set): runner bunları kullanıcının değerinin ÜSTÜNE yazar ---
+    # Amaç: aynı playbook'un güvenli/gerçek koşu eylemleri (örn. *_preview: hardening_pve_apply=false, *_apply: true) kullanıcı değerinden bağımsız olsun.
+    for name, a in actions.items():
+        if not isinstance(a, dict) or "set" not in a:
+            continue
+        sv = a["set"]
+        if not isinstance(sv, dict) or not sv or len(sv) > 8:
+            err("%s: set boş olmayan (en çok 8) nesne olmalı" % name)
+            continue
+        dir_var = a.get("outputs", {}).get("dir_var") if isinstance(a.get("outputs"), dict) else None
+        for k in sorted(sv):
+            val = sv[k]
+            if k not in var_specs:
+                err("%s: set bilinmeyen değişken: %s" % (name, k))
+                continue
+            if k == dir_var:
+                err("%s: set, outputs.dir_var değişkenini (%s) ezemez" % (name, k))
+                continue
+            vt, vs = var_specs[k]
+            ok_val = False
+            if vt == "bool":
+                ok_val = isinstance(val, bool)
+            elif vt == "int":
+                ok_val = is_int(val) and not isinstance(val, bool) and (vs.get("min") is None or val >= vs["min"]) and (vs.get("max") is None or val <= vs["max"])
+            elif vt == "enum":
+                ok_val = is_str(val) and val in vs.get("values", [])
+            elif vt in ("string", "path"):
+                ok_val = is_str(val) and bool(val) and len(val) <= 200 and not RE_TEXT_BAD.search(val)
+            if not ok_val:
+                err("%s: set %s için geçersiz değer/tür (yalnızca bool, int, enum, string, path; liste yok)" % (name, k))
+                continue
+            act_lines.append("action.%s.set=%s=%s" % (name, k, ("true" if val else "false") if isinstance(val, bool) else val))
 
     # --- invoke.append ---
     inv_lines = []
     inv = d.get("invoke", {})
+    if runner == "script" and (inv or d.get("inventory_group") is not None):
+        err("invoke ve inventory_group yalnızca ansible runner içindir")
+        inv = {}
     app = inv.get("append", []) if isinstance(inv, dict) else None
     if not isinstance(app, list):
         err("invoke.append liste olmalı")
