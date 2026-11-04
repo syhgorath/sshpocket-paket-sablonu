@@ -2,10 +2,10 @@
 
 Bu klasördeki dosyalar sshpocket'ten KOPYALANMIŞTIR; elle düzenlemeyin. Güncellemek için: `tools/sync-validator.sh <sshpocket-dizini>`.
 
-- kaynak: https://github.com/syhgorath/sshpocket (commit `cf4255c`, sürüm `3.6.17`)
-- tarih: 2026-10-29
+- kaynak: https://github.com/syhgorath/sshpocket (commit `957bd65`, sürüm `3.6.21`)
+- tarih: 2026-11-04
 
 | dosya | sha256 |
 |---|---|
-| `component_validate.py` | `3036da3a46b58d8ee28b2527ea5e54ea0675d419ea649bd0b87eb77bf0c33c7f` |
-| `component_manifest.py` | `87ef84bf1a80c10cc6e6ad319b30a8ecefbb013d0a64364a079364458736fd1c` |
+| `component_validate.py` | `44bc81fb466b6810dacdb9c1f22dc1cad87dcbf9b853200bdf8c7bb535031589` |
+| `component_manifest.py` | `a0a07cc0c7ef81eb739c1c0bdc85184a2ca4117fd9f92d9a5341facd2d807c26` |
