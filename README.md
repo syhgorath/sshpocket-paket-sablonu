@@ -30,6 +30,12 @@ Basit işler (sağlık özeti, temizlik, tek ayar) için playbook yerine **betik
 - Kökteki Ansible örneği **paketin kendisidir**; `ornekler/` yayın paketine girmez (`.gitattributes`).
 - Ayrıntı: sshpocket `docs/package-standard.md` §7.
 
+## İsteğe bağlı manifest alanları (sshpocket 3.6.20 ve sonrası)
+Şablondaki küçük paket bunları kullanmaz; ihtiyacınız olursa [standardın](https://github.com/syhgorath/sshpocket/blob/main/docs/package-standard.md) ilgili bölümüne bakın. Doğrulayıcı hepsini tanır.
+- **`requires_vars`** (eylem düzeyi): listedeki değişkenler değerler dosyasında boş/yoksa sshpocket eylemi ssh'a gitmeden ⛔ kapatır (örn. erişimi kilitleyebilecek `allow_from`). Standart §6.
+- **`platform_choices` + `platform_var`** (üst düzey): sunucu eklerken sorulan tür listesi (`id`, `label`, `description`, `defaults`, `apply_vars`, `apply_warnings`); seçilen platformun `defaults` değerleri onayla yazılır. `onboarding_vars`: ilk açılışta sorulması gereken zorunlu değişkenler (`list[cidr]` için ağ editörü). Standart §6.
+- **`outputs.findings`**: denetim eyleminin yazdığı bulgu dosyası (`bulgular.tsv`); sshpocket sunucu menüsünde 🔎 Bulgular olarak listeler. Standart §8.
+
 ## Dosya haritası
 | Dosya | Ne işe yarar |
 |---|---|
