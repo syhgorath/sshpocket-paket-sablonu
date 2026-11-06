@@ -16,7 +16,7 @@ Standart: [docs/package-standard.md](https://github.com/syhgorath/sshpocket/blob
 5. **Denetleyin:** `python3 -I tools/validate/component_validate.py . --strict` (❌ hata, ⚠️ uyarı; hedef: ikisi de yok).
 6. **Sürüm:** `VERSION`, `component.json` `version` ve `CHANGELOG.md` başlığını güncelleyin, commit edin, `git tag -a vX.Y.Z`. Sonra:
    `PAKET_SIGNING_KEY=~/.ssh/<özel_anahtar> scripts/release.sh` → `dist/<id>-<sürüm>.tar.gz` + `.sig` (imza yayından önce kendi public anahtarıyla doğrulanır).
-7. Dosyaları GitHub'da `vX.Y.Z` Release'ine yükleyin; sshpocket bakımcısı kilide yazar: `scripts/lock-component.sh <id> <sürüm> --repo <sahip>/<depo> --write` (tek satırlık PR).
+7. **Yayın tek komut:** `PAKET_SIGNING_KEY=~/.ssh/<özel_anahtar> scripts/release-publish.sh --dry-run`, sonra komutu `--dry-run`'sız çalıştırın: etiketi iter, `release.sh` ile imzalar, GitHub Release açar, yüklenen dosyaların özetini doğrular ve **imzalı paket indeksini** günceller (`$SSHPOCKET_INDEX_DIR/scripts/index-publish.sh`, varsayılan `~/Developer/sshpocket-index`; indeks deposunda yerel commit, push sizde). Normal sürümde `components.lock` PR'ı gerekmez; kilit yalnızca asgari sürüm (taban) yükseltmek içindir: `scripts/lock-component.sh <id> <sürüm> --repo <sahip>/<depo> --write`. Ayrıntı: sshpocket `docs/package-index.md`.
 
 > Güven modeli: sshpocket yalnızca **kendi kilit dosyasındaki, imzalı** paketleri çalıştırır. Üçüncü taraf paket desteklenmez; yeni paketi sshpocket bakımcısı imzalar ve kilitler.
 > **Özel imza anahtarı asla** repoya, CI'a veya sohbete konmaz.
@@ -45,6 +45,7 @@ Basit işler (sağlık özeti, temizlik, tek ayar) için playbook yerine **betik
 | `requirements.in` / `requirements.txt` | Denetleyici makinedeki Python bağımlılıkları. `.txt` **hash'li ve sabit sürümlü** olmalı (`pip-compile --generate-hashes --strip-extras --allow-unsafe -o requirements.txt requirements.in`) |
 | `VERSION`, `CHANGELOG.md` | Sürüm üçlüsünün parçaları (`VERSION` = `component.json` = etiket) |
 | `scripts/release.sh` | İmzalı paket üretir (geliştirici dosyası; pakete girmez) |
+| `scripts/release-publish.sh` | Etiket + imza + GitHub Release + özet doğrulaması + paket indeksi güncellemesi (geliştirici dosyası; pakete girmez) |
 | `ornekler/` | Ek örnek paketler (`betik-paketi`: `runner: script`); yayın paketine girmez, CI `--strict` denetler |
 | `tools/validate/` | sshpocket'in sözleşme doğrulayıcısı (**vendored kopya**, elle düzenlemeyin; özetler `VENDORED.md`'de, CI denetler) |
 | `.gitattributes` | `export-ignore`: `.github/`, `tools/`, `scripts/` yayın paketine girmez |
