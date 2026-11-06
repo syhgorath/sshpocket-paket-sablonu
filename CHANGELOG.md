@@ -9,6 +9,7 @@ Biçim [Keep a Changelog](https://keepachangelog.com/) esas alınmıştır.
 - README: isteğe bağlı manifest alanları (3.6.20+) için kısa bölüm eklendi.
 
 ### Eklendi
+- `scripts/release-publish.sh`: yayın akışı tek komutta (etiket, `release.sh` imzası, GitHub Release, özet doğrulaması) ve son adım olarak **imzalı paket indeksi** güncellemesi (`index-publish.sh`, indeks deposunda yerel commit; push bakımcıda). `utility` paketindeki betikten türetildi; `scripts/check-consistency.py` yoksa o denetim atlanır. **Denenmedi:** gerçek yayın (yalnızca `bash -n` + `shellcheck`).
 - `ornekler/betik-paketi/`: `runner: script` örnek paketi (`saglik` salt okunur, `journal_onizle` + `journal_temizle` sudo'lu, önizlemeli, destructive). CI bu klasörü `--strict` doğrular ve betikleri `bash -n` + `shellcheck` ile denetler; `.gitattributes` ve `scripts/release.sh` `ornekler/`'in yayın paketine girmediğini garanti eder.
 - README: "Ansible yerine betik mi?" bölümü.
 
