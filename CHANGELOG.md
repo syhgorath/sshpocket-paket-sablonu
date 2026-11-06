@@ -4,6 +4,9 @@ Biçim [Keep a Changelog](https://keepachangelog.com/) esas alınmıştır.
 
 ## [Unreleased]
 
+### Düzeltildi
+- `scripts/release-publish.sh`: indeks adımı `index-publish.sh` çağrısına `--yes` geçirir (ve `--dry-run` planında, hata mesajındaki yeniden çalıştırma komutunda gösterir). Betiğin başındaki y/N zaten yayın onayıdır; indeks `sign` ikinci onay isteyip etkileşimsiz pencerede "iptal edildi (etkileşimsiz kullanımda --yes verin)" ile düşüyordu (Release yayımlanıyor, indeks elle tamamlanıyordu). **Denenmedi:** gerçek yayın (yalnızca `bash -n` + `shellcheck`).
+
 ### Değişti
 - **Vendored doğrulayıcı sshpocket 3.6.21 ile senkronlandı** (`tools/validate/`): `requires_vars`, `platform_choices` / `onboarding_vars` / `apply_vars`, `outputs.findings` alanları tanınır. Şablon ve `ornekler/betik-paketi` `--strict --unsigned` ile ✅ uyumlu.
 - README: isteğe bağlı manifest alanları (3.6.20+) için kısa bölüm eklendi.
